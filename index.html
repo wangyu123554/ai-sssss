@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AI 智能管家</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body, html { height: 100%; font-family: sans-serif; background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%); display: flex; justify-content: center; align-items: center; overflow: hidden; }
+        .glass-container { width: 95%; max-width: 480px; height: 90vh; background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(25px); border-radius: 32px; display: flex; flex-direction: column; box-shadow: 0 20px 80px rgba(0, 0, 0, 0.08); overflow: hidden; }
+        .chat-header { padding: 22px; text-align: center; background: rgba(255, 255, 255, 0.5); border-bottom: 1px solid rgba(255, 255, 255, 0.4); }
+        #chat-window { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 18px; }
+        .msg { max-width: 85%; padding: 14px 20px; border-radius: 20px; font-size: 15px; line-height: 1.6; }
+        .user-msg { align-self: flex-end; background: #0ea5e9; color: white; border-bottom-right-radius: 6px; }
+        .ai-msg { align-self: flex-start; background: white; color: #334155; border-bottom-left-radius: 6px; border: 1px solid rgba(0,0,0,0.06); }
+        .input-area { padding: 18px; display: flex; gap: 12px; background: rgba(255, 255, 255, 0.6); }
+        #user-input { flex: 1; padding: 15px; border-radius: 20px; border: 1px solid rgba(0,0,0,0.09); outline: none; }
+        #send-btn { background: #0ea5e9; border: none; padding: 0 20px; color: white; border-radius: 20px; cursor: pointer; }
+        .loading-msg { align-self: flex-start; background: white; padding: 10px; border-radius: 15px; font-size: 13px; color: #94a3b8; }
+    </style>
+</head>
+<body>
+    <div class="glass-container">
+        <div class="chat-header">
+            <h2>🌊新蓝澜AI智能助理 演示版</h2>
+            <p style="font-size: 12px; color: #0ea5e9;">已通过后端代理加密运行</p>
+        </div>
+        <div id="chat-window">
+            <div class="msg ai-msg">您好！我已经准备好为您服务了。有什么可以帮您的吗？</div>
+        </div>
+        <div class="input-area">
+            <input type="text" id="user-input" placeholder="输入您的问题...">
+            <button id="send-btn" onclick="sendMessage()">发送</button>
+        </div>
+    </div>
+
+    <script>
+        const FIXED_USER_ID = `visitor_${Math.random().toString(36).substr(2, 9)}`;
+        let conversationId = "";
+        let isSending = false;
+
+        // 绑定回车键
+        document.getElementById('user-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+
+        async function sendMessage() {
+            const inputEl = document.getElementById('user-input');
+            const sendBtn = document.getElementById('send-btn');
+            const query = inputEl.value.trim();
+
+            if (!query || isSending) return;
+            
+            isSending = true;
+            sendBtn.disabled = true;
+            appendMessage(query, 'user-msg');
+            inputEl.value = '';
+            const loadingId = appendLoading();
+
+            try {
+                // 请求 Python 后端接口
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        query: query,
+                        user: FIXED_USER_ID,
+                        conversation_id: conversationId
+                    })
+                });
+
+                removeLoading(loadingId);
+                const data = await response.json();
+
+                if (data.answer) {
+                    appendMessage(data.answer, 'ai-msg');
+                    if (data.conversation_id) conversationId = data.conversation_id;
+                } else {
+                    appendMessage("助手开小差了，请稍后再试。", 'ai-msg');
+                }
+            } catch (error) {
+                removeLoading(loadingId);
+                appendMessage("连接失败，请检查后端 Python 服务是否开启。", 'ai-msg');
+            } finally {
+                isSending = false;
+                sendBtn.disabled = false;
+            }
+        }
+
+        function appendMessage(text, className) {
+            const chatWindow = document.getElementById('chat-window');
+            const msgEl = document.createElement('div');
+            msgEl.className = `msg ${className}`;
+            msgEl.innerText = text;
+            chatWindow.appendChild(msgEl);
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+        }
+
+        function appendLoading() {
+            const chatWindow = document.getElementById('chat-window');
+            const id = 'loading-' + Date.now();
+            const loadingEl = document.createElement('div');
+            loadingEl.id = id;
+            loadingEl.className = 'loading-msg';
+            loadingEl.innerText = '正在思考中...';
+            chatWindow.appendChild(loadingEl);
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+            return id;
+        }
+
+        function removeLoading(id) {
+            const el = document.getElementById(id);
+            if (el) el.remove();
+        }
+    </script>
+</body>
+</html>
